@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+interface IExchange {
+    function getExchangeRate(address token1, address token2) external view returns (uint256);
+    function swap(address token1, address token2, uint256 amount) external;
+}
+
+contract ArbitrageBot {
+    address public owner;
+    IExchange public exchange1;
+    IExchange public exchange2;
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "Not owner");
+        _;
+    }
+
+    constructor(address _exchange1, address _exchange2) {
+        owner = msg.sender;
+        exchange1 = IExchange(_exchange1);
+        exchange2 = IExchange(_exchange2);
+    }
+
+    function executeArbitrage(
+        address token1, 
+        address token2, 
+        uint256 amount
+    ) external onlyOwner {
+        uint256 rate1 = exchange1.getExchangeRate(token1, token2);
+        uint256 rate2 = exchange2.getExchangeRate(token2, token1);
+
+        require(rate1 > rate2, "No arbitrage opportunity");
+
+        // Swap on exchange1
+        exchange1.swap(token1, token2, amount);
+
+        // Calculate the amount of token2 received
+        uint256 token2Amount = amount * rate1 / 1e18;
+
+        // Swap on exchange2
+        exchange2.swap(token2, token1, token2Amount);
+    }
+
+    function withdraw(address token, uint256 amount) external onlyOwner {
+        IERC20(token).transfer(owner, amount);
+    }
+
+    function withdrawEther(uint256 amount) external onlyOwner {
+        payable(owner).transfer(amount);
+    }
+
+    receive() external payable {}
+}
+
+interface IERC20 {
+    function transfer(address recipient, uint256 amount) external returns (bool);
+}
